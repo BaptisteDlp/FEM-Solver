@@ -1,0 +1,877 @@
+#include<iostream>
+#include<fstream>
+#include<vector>
+#include<cassert>
+#include<cmath>
+#include<ctime>
+#include"DenseMatrix.hpp"
+#include"Vecteur.hpp"
+
+
+
+using namespace std;
+
+
+
+
+DenseMatrix::DenseMatrix(){
+  m_nbR = 1;
+  m_nbC = 1;
+  m_coeff.push_back(0);
+  m_factoLU = false;
+  m_factoCho = false;
+}
+
+
+
+DenseMatrix::DenseMatrix(int nbR, int nbC){
+	
+  m_nbR = nbR;
+  m_nbC = nbC;
+  m_factoLU = false;
+  m_factoCho = false;
+	
+  for(int i = 0; i<m_nbR*m_nbC; i++){
+		
+    m_coeff.push_back(0);
+		
+  }
+}
+
+
+
+
+
+DenseMatrix::DenseMatrix(DenseMatrix const& m){
+	
+  m_nbR = m.m_nbR;
+  m_nbC = m.m_nbC;
+  m_factoLU = m.m_factoLU;
+  m_factoCho = m.m_factoCho;
+	
+  for(int i = 0; i<m.m_nbR*m.m_nbC; i++){
+    m_coeff.push_back(m.m_coeff[i]);
+  }
+	
+	
+}
+
+
+
+
+
+
+void DenseMatrix::Load(char* const filename){
+	
+	
+  ifstream flux(filename);
+	
+  if(flux){
+    int nbR(0), nbC(0);
+    string line;
+		
+    getline(flux,line);
+    flux>>nbR; flux>>nbC;
+		
+    assert(nbR == m_nbR && nbC == m_nbC);
+		
+    getline(flux,line);
+    getline(flux,line);
+		
+		
+    for(int i=0; i<m_nbR; i++){
+      for(int j=0; j<m_nbC; j++){
+	flux>>m_coeff[i+j*m_nbR];
+      }
+    }
+		
+  }else{
+    cout<<"Fichier impossible à ouvrir"<<endl;
+  }
+
+}
+	
+
+
+
+
+
+int DenseMatrix::getnbR() const{ return m_nbR;}
+
+int DenseMatrix::getnbC() const{ return m_nbC;}
+
+
+bool DenseMatrix::getFactoLU() const{ return m_factoLU;}
+
+bool DenseMatrix::getFactoCho() const{ return m_factoCho;}
+
+double DenseMatrix::getCoeff(int i) const{ return m_coeff[i]; }
+
+
+
+
+double FrobNorm(DenseMatrix const& M){
+	
+  double result(0);
+	
+  for(int i = 0; i<M.m_nbR; i++){
+		
+    for(int j = 0; j<M.m_nbC; j++){
+      result += M(i,j)*M(i,j);
+    }
+  }
+	
+  return sqrt(result);
+	
+}
+
+
+
+
+
+
+
+
+void DenseMatrix::printMat() const{
+	
+	
+  for(int i = 0; i<m_nbR; i++){
+    cout<<"| ";
+    for(int j = 0; j<m_nbC; j++){
+      cout<<" "<<(*this)(i,j)<<" ";
+    }
+    cout<<" |"<<endl;
+  }
+	
+	
+}
+
+
+
+
+
+
+void DenseMatrix::printFlux(ostream &flux) const
+{
+  flux<<endl;
+  for(int i = 0; i<m_nbR; i++){
+    flux<<"| ";
+    for(int j = 0; j<m_nbC; j++){
+      flux<<" "<<(*this)(i,j)<<" ";
+    }
+    flux<<" |"<<endl;
+  }
+  flux<<endl;
+}
+
+
+
+
+
+
+
+
+double& DenseMatrix::operator()(int i, int j){
+	
+  assert(i>-1 && i<m_nbR && j>-1 && j<m_nbC);
+  return m_coeff[i+j*m_nbR];
+
+}
+
+
+
+
+
+
+double DenseMatrix::operator()(int i, int j) const{
+	
+  assert(i>-1 && i<m_nbR && j>-1 && j<m_nbC);
+  return m_coeff[i+j*m_nbR];
+	
+	
+}
+
+
+
+
+
+
+DenseMatrix& DenseMatrix::operator+=(DenseMatrix const& m){
+	
+  assert(m_nbR == m.m_nbR && m_nbC == m.m_nbC);
+	
+  for(int i = 0; i<m_nbR*m_nbC; i++){
+    m_coeff[i] += m.m_coeff[i];
+  }
+	
+  return *this;
+}
+
+
+
+
+
+
+DenseMatrix& DenseMatrix::operator-=(DenseMatrix const& m){
+	
+  assert(m_nbR == m.m_nbR && m_nbC == m.m_nbC);
+	
+  for(int i = 0; i<m_nbR*m_nbC; i++){
+    m_coeff[i] -= m.m_coeff[i];
+  }
+	
+  return *this;
+}
+
+
+
+
+Vecteur DenseMatrix::MVProdT(Vecteur const& v){
+	
+  assert(getnbC() == v.getTaille());
+	
+  Vecteur a(v.getTaille());
+	
+  for(int i = 0; i<a.getTaille(); i++){
+		
+    for(int j = 0; j<a.getTaille(); j++){
+      a(i) += (*this)(j,i)*v(j);
+    }
+		
+		
+  }
+	
+  return a;
+	
+}
+
+
+
+
+
+
+DenseMatrix operator+(DenseMatrix const& m1, DenseMatrix const& m2){
+	
+  DenseMatrix a(m1);
+  a += m2;
+  return a;
+	
+	
+}
+
+
+
+
+
+
+
+DenseMatrix operator-(DenseMatrix const& m1, DenseMatrix const& m2){
+	
+  DenseMatrix a(m1);
+  a -= m2;
+  return a;
+	
+	
+}
+
+
+
+
+
+
+DenseMatrix operator*(double c, DenseMatrix const& m){
+	
+  DenseMatrix a(m);
+	
+  for(int i = 0; i<a.getnbR(); i++){
+		
+    for(int j = 0; j<a.getnbC(); j++){
+      a(i,j) = c*a(i,j);
+    }
+		
+  }
+	
+  return a;
+	
+}
+
+
+
+
+
+
+
+
+DenseMatrix operator*(DenseMatrix const& m1, DenseMatrix const& m2){
+	
+  assert(m1.getnbC() == m2.getnbR());
+	
+  DenseMatrix m(m1.getnbR(),m2.getnbC());
+	
+  for(int i = 0; i<m1.getnbR(); i++){
+		
+    for(int j = 0; j<m2.getnbC(); j++){
+			
+      for(int k = 0; k<m2.getnbC(); k++){
+	m(i,j) += m1(i,k)*m2(k,j);
+      }
+    }
+		
+  }
+	
+  return m;
+	
+}
+
+
+
+
+
+
+
+
+
+Vecteur operator*(DenseMatrix const& m, Vecteur const& v){
+	
+  assert(m.getnbC() == v.getTaille());
+	
+  Vecteur a(v.getTaille());
+	
+  for(int i = 0; i<a.getTaille(); i++){
+		
+    for(int j = 0; j<a.getTaille(); j++){
+      a(i) += m(i,j)*v(j);
+    }
+		
+		
+  }
+	
+  return a;
+	
+}
+
+
+
+
+
+double* operator*(DenseMatrix const& m, double * v){
+	
+  double vec[m.getnbC()];
+	
+  for(int i = 0; i<m.getnbC(); i++){
+		
+    for(int j = 0; j<m.getnbC(); j++){
+      vec[i] += m(i,j)*v[j];
+    }
+		
+		
+  }
+  
+
+	
+}
+
+
+
+
+
+
+
+
+ostream& operator<<( ostream &flux, DenseMatrix const& m ){
+  m.printFlux(flux);
+  return flux;
+}
+
+
+
+
+
+
+
+
+Vecteur inv_triang_inf(DenseMatrix const& m, Vecteur const& y){
+	
+  assert(m.getnbR() == m.getnbC());
+  assert(m.getnbR() == y.getTaille());
+	
+  Vecteur z(y);
+	
+	
+  for(int i = 0; i<z.getTaille(); i++){
+		
+    z(i) = y(i)/m(i,i);
+    for(int j = 0; j<i; j++){
+      z(i) -= (m(i,j)*z(j))/m(i,i);
+    }
+		
+  }
+	
+  return z;
+}
+
+
+
+
+
+
+
+
+
+
+
+Vecteur inv_triang_sup(DenseMatrix const& m, Vecteur const& y){
+	
+  assert(m.getnbR() == m.getnbC());
+  assert(m.getnbR() == y.getTaille());
+	
+  Vecteur z(y);
+	
+	
+  for(int i = z.getTaille()-1; i>-1; i--){
+		
+    z(i) = y(i)/m(i,i);
+		
+    for(int j = z.getTaille()-1; j>i; j--){
+      z(i) -= (m(i,j)*z(j))/m(i,i);
+    }
+		
+  }
+	
+  return z;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+DenseMatrix matLaplacienD(int taille){
+	
+  assert(taille > 1);
+	
+  DenseMatrix a(taille,taille);
+	
+	
+  for(int i = 0; i<taille; i++){
+		
+    if(i == 0){
+      a(i,1) = -1;
+    }else{
+      if(i == taille -1){
+	a(i,i-1) = -1;
+      }else{
+	a(i,i-1) = -1;
+	a(i,i+1) = -1;
+				
+      }
+    }
+		
+    a(i,i) = 2;
+
+  }
+	
+  return a;
+}
+
+
+
+
+
+
+
+
+
+void DenseMatrix::decomp_LU(){
+	
+  assert(m_nbR == m_nbC);
+  int k(0), taille(m_nbR);
+	
+	
+  for(k = 0; k<taille; k++){
+		
+		
+		
+    for(int i = 1+k; i<taille; i++){
+		
+      (*this)(k,i) = (*this)(k,i);
+      (*this)(i,k) = (*this)(i,k)/(*this)(k,k);
+			
+    }
+		
+    for(int i = 1+k; i<taille; i++){
+		
+      for(int j = 1+k; j<taille; j++){
+				
+	(*this)(i,j) = (*this)(i,j) - (*this)(i,k)*(*this)(k,j);
+			
+      }
+		
+    }
+	
+  }
+		
+  m_factoLU = true;
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+Vecteur inv_LU(DenseMatrix &a, Vecteur const& b){
+	
+  assert(a.getFactoLU());
+	
+	
+  Vecteur z(b.getTaille());
+  DenseMatrix L(b.getTaille(),b.getTaille()), U(b.getTaille(),b.getTaille());
+	
+  for(int i = 0; i<b.getTaille(); i++){
+		
+    for(int j = 0; j<b.getTaille(); j++){
+		
+      if(i>j){
+	L(i,j) = a(i,j);
+      }else{
+	U(i,j) = a(i,j);
+	if(i==j){
+	  L(i,j) = 1;
+	}
+			
+      }			
+    }
+		
+  }
+	
+	
+  z = inv_triang_inf(L,b);
+	
+  return inv_triang_sup(U,z);;
+	
+}
+
+
+
+
+void inv_LU(DenseMatrix &a, double* b, double *z){
+	
+  assert(a.getFactoLU());
+	
+  int n = a.getnbC();
+ 
+  DenseMatrix L(n,n), U(n,n);
+	
+  for(int i = 0; i<n; i++){		
+    for(int j = 0; j<n; j++){	
+      if(i>j){
+	L(i,j) = a(i,j);
+      }else{
+	U(i,j) = a(i,j);
+	if(i==j){
+	  L(i,j) = 1;
+	}			
+      }			
+    }		
+  }
+       
+  
+  for(int i = 0; i<n; i++){
+		
+    z[i] = b[i]/L(i,i);
+    for(int j = 0; j<i; j++){
+      z[i] -= (L(i,j)*z[j])/L(i,i);
+    }
+		
+  }
+	
+
+  for(int i = n-1; i>-1; i--){
+		
+    z[i] = b[i]/U(i,i);
+    for(int j = n-1; j>i; j--){
+      z[i] -= (U(i,j)*z[j])/U(i,i);
+    }
+		
+  }
+
+ 
+}
+
+
+
+
+
+
+
+
+void DenseMatrix::decomp_Cholesky(){
+	
+
+  assert(m_nbR == m_nbC);
+  int k(0), taille(m_nbR);
+
+  for(k = 0; k<taille; k++){
+		
+    (*this)(k,k) = sqrt((*this)(k,k));
+		
+    for(int i = 1+k; i<taille; i++){
+		
+      (*this)(i,k) = (*this)(i,k)/(*this)(k,k);
+      (*this)(k,i) = 0;
+
+    }
+		
+		
+    for(int i = 1+k; i<taille; i++){
+			
+      for(int j = 1+k; j<=i; j++){
+				
+	(*this)(i,j) = (*this)(i,j) - (*this)(i,k)*(*this)(j,k);
+			
+      }
+		
+    }
+	
+  }
+	
+	
+  m_factoCho = true;
+	
+	
+}
+
+
+
+
+
+
+Vecteur inv_Cho(DenseMatrix &a, Vecteur const& b){
+	
+  assert(a.getFactoCho());
+	
+	
+  Vecteur z(b.getTaille());
+  DenseMatrix  U(b.getTaille(),b.getTaille());
+	
+  for(int i = 0; i<b.getTaille(); i++){
+		
+    for(int j = 0; j<b.getTaille(); j++){
+		
+      U(i,j) = a(j,i);	
+    }
+		
+  }
+	
+	
+  z = inv_triang_inf(a,b);
+	
+  return inv_triang_sup(U,z);;
+	
+}
+
+
+
+
+void inv_Cho(DenseMatrix &a, double* b, double *z){
+	
+  assert(a.getFactoCho());
+	
+  int n = a.getnbC();
+
+  DenseMatrix  U(n,n);
+	
+  for(int i = 0; i<n; i++){
+		
+    for(int j = 0; j<n; j++){
+		
+      U(i,j) = a(j,i);	
+    }
+		
+  }
+	
+
+  for(int i = 0; i<n; i++){
+		
+    z[i] = b[i]/a(i,i);
+    for(int j = 0; j<i; j++){
+      z[i] -= (a(i,j)*z[j])/a(i,i);
+    }
+		
+  }
+	
+
+  for(int i = n-1; i>-1; i--){
+		
+    z[i] = b[i]/U(i,i);
+    for(int j = n-1; j>i; j--){
+      z[i] -= (U(i,j)*z[j])/U(i,i);
+    }
+		
+  }
+
+ 
+	
+}
+
+
+
+
+
+
+
+Vecteur solveCholesky(DenseMatrix &a, Vecteur const& b){
+	
+  assert(a.getnbR() == a.getnbC() && a.getnbR() == b.getTaille());
+	
+	
+  clock_t t = clock();
+  a.decomp_Cholesky();
+  Vecteur x = inv_Cho(a,b);
+  t = clock() -t;
+  float tempsExe = ((float)t)/CLOCKS_PER_SEC;
+  cout<<"Linear system solved with Cholesky in "<<tempsExe<<"sec"<<endl;
+  return x;
+	
+	
+}
+
+
+
+
+
+void solveCholesky(DenseMatrix &a, double * b, double *x){
+	
+
+  clock_t t = clock();
+  a.decomp_Cholesky();
+  inv_Cho(a,b,x);
+  t = clock() -t;
+  float tempsExe = ((float)t)/CLOCKS_PER_SEC;
+  cout<<"Linear system solved with Cholesky in "<<tempsExe<<"sec"<<endl;
+
+}
+
+
+
+
+
+
+
+Vecteur solveLU(DenseMatrix &a, Vecteur const& b){
+	
+  assert(a.getnbR() == a.getnbC() && a.getnbR() == b.getTaille());
+	
+	
+  clock_t t = clock();
+  a.decomp_LU();
+  Vecteur x = inv_Cho(a,b);
+  t = clock() -t;
+  float tempsExe = ((float)t)/CLOCKS_PER_SEC;
+  cout<<"Linear system solved with LU in "<<tempsExe<<"sec"<<endl;
+  return x;
+	
+	
+}
+
+
+
+
+void solveLU(DenseMatrix &a, double * b, double *x){
+  
+  clock_t t = clock();
+  a.decomp_LU();
+  inv_LU(a,b,x);
+  t = clock() -t;
+  float tempsExe = ((float)t)/CLOCKS_PER_SEC;
+  cout<<"Linear system solved with LU in "<<tempsExe<<"sec"<<endl;
+ 		
+}
+
+
+
+
+
+
+
+
+DenseMatrix matHn(int taille){
+	
+  assert(taille > 1);
+	
+  DenseMatrix a(taille,taille);
+	
+  for(int i = 0; i<taille; i++){
+		
+    a(i,i) = i+1;
+		
+    if(i+2<taille){
+      a(i,i+2) = 1;
+    }
+		
+    if(i-2>=0){
+      a(i,i-2) = 1;
+    }
+
+  }
+	
+  return a;
+	
+	
+}
+
+
+
+
+
+
+
+
+DenseMatrix PrecondJacobi(DenseMatrix const& A){
+	
+  assert(A.getnbR() == A.getnbC());
+  DenseMatrix P_1(A.getnbR(),A.getnbR());
+	
+  for(int i = 0; i<A.getnbR(); i++){
+    P_1(i,i) = 1/A(i,i);
+  }
+	
+	
+  return P_1;
+	
+}
+
+
+
+
+
+
+DenseMatrix B_Matrix(int size){
+	
+  DenseMatrix B(size,size);
+	
+  for(int j = 0; j<size; j++){
+    for(int k = 0; k<size; k++){
+      B(j,k) = exp(-(j-k)*(j-k)/(double(size*size)));
+    }
+  }
+	
+  return B;
+}
+
+

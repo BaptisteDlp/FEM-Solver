@@ -1,0 +1,17 @@
+#include "SparseMat.hpp"
+using namespace std;
+
+
+
+ostream &   operator<<(ostream & f, const MatCSR & A)
+{
+    f << A.n << " " << A.m << " " << A.nnz << endl;
+    for(int i=0; i<A.n; ++i)
+    {
+        f << i << " : " ;
+        for(int k=A.ip[i]; k <A.ip[i+1]; ++k)
+            f << " " << A.j[k] << " " << A.a[k] << ";   ";
+        f << endl;
+    }
+    return f;
+}

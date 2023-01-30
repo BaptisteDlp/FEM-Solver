@@ -1,0 +1,491 @@
+#include<iostream>
+#include<vector>
+#include<cassert>
+#include<stdlib.h>
+#include"SparseMatrixCoo.hpp"
+#include"Vecteur.hpp"
+
+
+using namespace std;
+
+
+
+
+SparseMatrixCoo::SparseMatrixCoo(){
+	
+  m_nbR = 1;
+  m_nbC = 1;
+  m_nnz = 1;
+	
+  m_row.push_back(0);
+  m_col.push_back(0);
+  m_val.push_back(1.);
+	
+	
+	
+}
+	
+
+
+	
+SparseMatrixCoo::SparseMatrixCoo(int const& taille){
+	
+  m_nbR = taille;
+  m_nbC = taille;
+  m_nnz = taille;
+	
+
+  for(int i = 0; i<taille; i++){
+    m_row.push_back(i);
+    m_col.push_back(i);
+    m_val.push_back(1.);
+  }
+	
+	
+		
+}
+
+
+
+
+
+SparseMatrixCoo::SparseMatrixCoo(int nbR, int nbC, vector<int> row, vector<int> col, vector<double> val){
+	
+	
+  m_nbR = nbR;
+  m_nbC = nbC;
+	
+	
+	
+	
+  for(unsigned int i = 0; i<col.size(); i++){
+		
+    m_row.push_back(row[i]);
+    m_col.push_back(col[i]);
+    m_val.push_back(val[i]);
+		
+  }
+	
+	
+	
+  m_nnz = val.size();
+	
+	
+}
+	
+	
+	
+	
+
+	
+SparseMatrixCoo::SparseMatrixCoo(SparseMatrixCoo const& m){
+	
+  m_nbR = m.getnbR(); 
+  m_nbC = m.getnbC(); 
+  m_nnz = m.getnnz(); 
+	
+  for(int i = 0; i<m.getnnz(); i++){
+    m_row.push_back(m.getRow(i)); 
+    m_col.push_back(m.getCol(i));
+    m_val.push_back(m.getVal(i));
+  }
+	
+	
+	
+	
+}
+	
+	
+	
+	
+	
+	
+void SparseMatrixCoo::zeros(){
+	
+  vector<int>::iterator it2 = m_col.begin();
+  vector<double>::iterator it3 = m_val.begin();
+	
+  for(vector<int>::iterator it1 = m_row.begin(); it1 != m_row.end(); ++it1){
+    m_row.erase(it1);
+    m_col.erase(it2);
+    m_val.erase(it3);
+    it2++;
+    it3++;
+  }
+	
+}
+	
+	
+	
+	
+
+	
+Vecteur SparseMatrixCoo::MVProd(Vecteur const& v) const{
+	
+  assert(m_nbR == m_nbC);
+  assert(m_nbC == v.getTaille());
+	
+  Vecteur a(v.getTaille());
+	
+  unsigned int l = 0;
+	
+  while(l< m_row.size()){
+		
+    int k = m_row[l];
+		
+    while(m_row[l] == k){
+      a(m_row[l]) += m_val[l]*v(m_col[l]);
+      l++;
+    }
+		
+  }
+	
+	
+  return a;
+	
+}
+	
+	
+	
+	
+	
+
+
+int SparseMatrixCoo::getnbR() const{ return m_nbR;}
+
+int SparseMatrixCoo::getnbC() const{ return m_nbC;}
+
+int SparseMatrixCoo::getnnz() const{ return m_nnz;}
+
+int SparseMatrixCoo::getRow(int i) const{ return m_row[i];}
+
+int SparseMatrixCoo::getCol(int i) const{ return m_col[i];}
+
+double SparseMatrixCoo::getVal(int i) const{ return m_val[i];}
+
+std::vector<int> SparseMatrixCoo::get_row() const{ return m_row;}
+std::vector<int> SparseMatrixCoo::get_col() const{ return m_col;}
+std::vector<double> SparseMatrixCoo::get_val() const{ return m_val;}
+
+
+
+
+
+void SparseMatrixCoo::Insert(int row, int col, double val){
+	
+  assert(row>-1 && row<m_nbR && col>-1 && col<m_nbC && val != 0);
+	
+  vector<int>::iterator it1 = m_row.begin();
+  vector<int>::iterator it2 = m_col.begin();
+  vector<double>::iterator it3 = m_val.begin();
+	
+  if(m_row.size() == 0){
+    m_row.push_back(row);
+    m_col.push_back(col);
+    m_val.push_back(val);
+    m_nnz++;
+  }else{
+    bool end = true;
+    for(it1 = m_row.begin(); it1 != m_row.end(); ++it1){
+      //cout<<"*it1="<<*it1<<endl;
+      //cout<<"*it2="<<*it2<<endl;
+      //cout<<"*it3="<<*it3<<endl;
+      if(*it1 == row){
+			
+	if(*it2 == col){
+				
+	  *it3 += val;
+				
+	  if(*it3 == 0){
+	    m_row.erase(it1);
+	    m_col.erase(it2);
+	    m_val.erase(it3);
+	    m_nnz--;
+	  }
+	  end = false;
+	  break;
+				
+	}else if(col<*it2){
+	  m_row.insert(it1,row);
+	  m_col.insert(it2,col);
+	  m_val.insert(it3,val);
+	  m_nnz++;
+	  end = false;
+	  break;
+				
+	}
+      }
+      it2++;
+      it3++;
+    }
+		
+    if(end){
+      m_row.push_back(row);
+      m_col.push_back(col);
+      m_val.push_back(val);
+      m_nnz++;
+    }
+  }
+	
+  //(*this).printRow();
+  //(*this).printCol();
+  //(*this).printVal();
+	
+	
+}
+
+
+
+
+
+
+
+
+void SparseMatrixCoo::printRow() const{
+	
+  cout<<"Row:";
+  for( unsigned int i = 0; i<m_row.size(); i++){
+    cout<<"|"<<m_row[i];
+  }
+  cout<<"|"<<endl;
+	
+}
+
+void SparseMatrixCoo::printCol() const{
+	
+  cout<<"Col:";
+  for(unsigned int i = 0; i<m_col.size(); i++){
+    cout<<"|"<<m_col[i];
+  }
+  cout<<"|"<<endl;
+	
+}
+
+
+void SparseMatrixCoo::printVal() const{
+	
+  cout<<"Val:";
+  for(unsigned int i = 0; i<m_val.size(); i++){
+    cout<<"|"<<m_val[i];
+  }
+  cout<<"|"<<endl;
+	
+}
+
+
+
+
+
+
+		
+void SparseMatrixCoo::printMat() const{
+	
+	
+  for(int i = 0; i<m_nbR; i++){
+    cout<<"|";
+    for(int j = 0; j<m_nbC; j++){
+			
+      cout<<" "<<(*this)(i,j)<<" ";
+			
+    }
+    cout<<"|"<<endl;
+  }
+	
+	
+}
+
+
+
+
+
+		
+		
+void SparseMatrixCoo::printFlux(ostream &flux) const
+{
+  flux<<endl;
+  for(int i = 0; i<m_nbR; i++){
+    flux<<"| ";
+    for(int j = 0; j<m_nbC; j++){
+			
+      flux<<" "<<(*this)(i,j)<<" ";
+			
+    }
+    flux<<" |"<<endl;
+  }
+  flux<<endl;
+}
+
+
+
+
+
+		
+double SparseMatrixCoo::operator()(int i, int j) const{
+	
+  assert(i>-1 && i<m_nbR && j>-1 && j<m_nbC);
+  bool  trouve = false;
+  unsigned int k = 0;
+	
+	
+  while(!(trouve) && k<m_val.size()){
+		
+    if(m_row[k] == i && m_col[k] == j){
+      trouve = true;
+    }else{
+      k++;
+    }
+  }
+	
+  if(trouve){
+    return m_val[k];
+  }else{
+    return 0;
+  }
+	
+}
+		
+
+
+
+Vecteur operator*(SparseMatrixCoo const& m, Vecteur const& v){
+	
+  return m.MVProd(v);
+	
+}
+
+		
+		
+
+		
+		
+		
+		
+
+
+
+
+		
+ostream& operator<<( ostream &flux, SparseMatrixCoo const& m ){
+  m.printFlux(flux);
+  return flux;
+}		
+		
+		
+
+
+
+
+
+		
+		
+Vecteur inv_triang_sup(SparseMatrixCoo const& m, Vecteur const& y){
+	
+  assert(m.getnbR() == m.getnbC());
+  assert(m.getnbC() == y.getTaille());
+	
+  Vecteur z(y);
+	
+	
+  for(int i = z.getTaille()-1; i>-1; i--){
+		
+    z(i) = y(i)/m(i,i);
+		
+    for(int j = z.getTaille()-1; j>i; j--){
+      z(i) -= (m(i,j)*z(j))/m(i,i);
+    }
+		
+  }
+	
+  return z;
+}
+		
+		
+		
+		
+		
+		
+
+
+
+		
+
+SparseMatrixCoo matriceLaplaciencoo(int taille){
+	
+  assert(taille > 1);
+	
+  vector<int> row;
+  vector<int> col;
+  vector<double> val;
+	
+	
+	
+  row.push_back(0);
+  row.push_back(0);
+	
+  col.push_back(0);
+  col.push_back(1);
+	
+  val.push_back(2);
+  val.push_back(-1);
+	
+	
+	
+  int r = 0;
+	
+  for(int i=1; i<taille-1; i++){
+    r = i - 1;
+    row.push_back(i);
+    row.push_back(i);
+    row.push_back(i);
+		
+    col.push_back(r);
+    col.push_back(r+1);
+    col.push_back(r+2);
+		
+    val.push_back(-1);
+    val.push_back(2);
+    val.push_back(-1);
+		
+  }
+	
+  row.push_back(taille-1);
+  row.push_back(taille-1);
+  col.push_back(taille-2);
+  col.push_back(taille-1);
+	
+  val.push_back(-1);
+  val.push_back(2);
+	
+  return SparseMatrixCoo(taille,taille,row,col,val);
+	
+	
+}
+	
+		
+		
+		
+		
+		
+
+		
+		
+
+
+
+
+
+
+	
+		
+	
+
+	
+	
+	
+	
+	
+	
+	
+		
+
+	

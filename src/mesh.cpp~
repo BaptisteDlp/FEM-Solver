@@ -1,0 +1,425 @@
+#include<iostream>
+#include<fstream>
+#include<stdlib.h>
+#include<cstring>
+#include<cmath>
+#include"mesh.hpp"
+
+
+using namespace std;
+
+
+Mesh::Mesh(std::string file_name, bool offset){
+
+
+  cout<<"==Mesh loading==\n"<<endl;
+  mesh_name = file_name;
+  ifstream file(file_name);
+  if(!file){
+    cout<<"ERROR OPENNING "<<file_name<<endl; exit(1);
+  }
+
+  int var1(0);
+  double var2(0);
+  file >> nbv; file >> nbt;
+  if(offset){
+    file >> nbe;
+  }
+
+ 
+  //loading vertices
+  for(int i = 0; i < nbv; i++){
+    pair<double,double>  coord;
+    file >> var2; coord.first = var2;
+    file >> var2; coord.second = var2;
+    pair<pair<double,double>,int> vertex;
+    vertex.first = coord;
+    file >> var1; vertex.second = var1;
+    tabv.push_back(vertex);
+  }
+  cout<<"vertices loaded"<<endl;
+  
+
+  tabt = new int*[nbt];
+
+  //loading elements
+  for(int i = 0; i < nbt; i++){
+    tabt[i] = new int[4];
+    file >> tabt[i][0]; tabt[i][0]--; //vertex 1
+    file >> tabt[i][1]; tabt[i][1]--; //vertex 2
+    file >> tabt[i][2]; tabt[i][2]--; //vertex 3
+    file >> tabt[i][3]; //label
+  }
+  cout<<"elements loaded"<<endl;
+ 
+  //loading edges 
+  vector<pair<int,int>> tabeb; //tab edges on boundary
+  
+  int *First = new int[nbv];
+  for(int i = 0; i < nbv; i++){
+    First[i] = -1;
+  }
+
+  
+  vector<int> Next;
+  vector<int> occ;
+
+  nbe = 0;
+ 
+  for(int t = 0; t < nbt; t++){
+    
+    //on parcourt tous les triangles
+    for(int j = 0; j<3; j++){
+      //on parcourt toutes les aretes du triangle
+      int  k1 = j;
+      int  k2 = (j+1)%3;
+      int il = min(tabt[t][k1],tabt[t][k2]);
+      int jl = max(tabt[t][k1],tabt[t][k2]);
+  
+      bool exist(false);
+
+      int k = First[il];
+     
+     
+      while(k != -1 && !(exist)){
+	//on parcourt la classe d equivalence
+	if(tabe[k].first == il && tabe[k].second == jl){
+	  exist = true; 
+	}
+
+	if(!(exist)){
+	  k = Next[k];
+	}
+
+      }
+     
+      if(!(exist)){
+	//l arrete n existe pas, on la rajoute
+	pair<int,int> edge;
+	edge.first = il;
+	edge.second = jl;
+	tabe.push_back(edge);
+	
+	//mise a jour des autres tableaux
+	Next.push_back(First[il]);
+	First[il] = nbe;
+	occ.push_back(1);
+	nbe++;
+      }else{
+	occ[k] ++;
+      }   
+    }
+  }
+    
+  
+ for(int q = 0; q<nbe; q++){
+    if(occ[q] == 1){
+      //l arrete n existe pas, on la rajoute
+      pair<int,int> edge;
+      edge.first = tabe[q].first;
+      edge.second = tabe[q].second;
+      tabeb.push_back(edge);	
+    }
+  }
+  cout<<"edges loaded"<<endl;
+  
+
+ 
+
+  //loading vertices on boundary
+
+  for(int i = 0; i < nbv; i++){
+    First[i] = -1;
+  }
+   
+                         
+  for(int i = 0; i < tabeb.size(); i++){
+    //on parcourt toutes les aretes
+    int v1 = tabeb[i].first;
+    int v2 = tabeb[i].second;
+
+    if(First[v1] == -1){
+      //le noeud n existe pas, on le rajoute
+      tabvBound.push_back(v1);
+      First[v1] =  1;
+    }
+		
+    if(First[v2] == -1){
+      //le noeud n existe pas, on le rajoute
+      tabvBound.push_back(v2);
+      First[v2] =  1;
+    }
+  }
+  cout<<"vertices on boundary loaded"<<endl;
+
+  nbvBound = tabvBound.size();
+
+  mesh_data = "data/mesh.data";
+  mesh_gnu = "data/mesh.gnu";
+  solution_data = "data/solution.data";
+  solution_gnu = "data/solution.gnu";
+  resolved = false;
+  
+  delete First;  
+  file.close();
+
+  cout<<"\n--> mesh loaded"<<endl;
+  cout<<nbv<<" vertices"<<endl;
+  cout<<nbt<<" elements"<<endl;
+  cout<<nbe<<" edges"<<endl;
+  cout<<nbvBound<<" vertices on boundary\n"<<endl;
+
+
+}
+
+
+
+
+
+Mesh::~Mesh(){
+
+  for(int i = 0; i < nbt; i++){
+    delete [] tabt[i];
+  }
+
+  delete [] tabt;
+
+}
+
+
+
+
+void Mesh::uniform_mesh(int nbv_h, int nbv_v, double x0, double xN, double y0, double yN, std::string fileName){
+	
+	
+  ofstream os(fileName);
+  if(!os){
+    cout<<"ERROR OPENNING "<<fileName<<endl; exit(1);
+  }
+	
+
+  double nbv = nbv_h*nbv_v;
+  int nbt = (nbv_h-1)*(nbv_v-1)*2;
+  os<<nbv<<" "<<nbt<<endl;
+
+    
+  double deltaH = abs(xN-x0)/(nbv_h-1);
+  double deltaV = abs(yN-y0)/(nbv_v-1);
+		
+  vector<double> nodesH; vector<double> nodesV;
+		
+  for(int i = 0; i<nbv_h; i++){
+    nodesH.push_back(x0+i*deltaH);
+  }
+  for(int i = 0; i<nbv_v; i++){
+    nodesV.push_back(y0+i*deltaV);
+  }
+		
+  int i(0), j(0), k(1);
+	
+  while(k<nbv+1){
+    while(j<nbv_h){
+      os<<nodesH[j]<<" "<<nodesV[i]<<" 0"<<endl;
+      j ++;
+      k ++;
+    }
+    i ++;
+    j = 0;
+  }
+	
+  int v1(1), v2(2), v3(nbv_h+2), tri(0);
+  k = 1;
+
+  while(k<nbt+1){
+    tri = 0;
+    while(tri<2){
+      os<<v1<<" "<<v2<<" "<<v3<<" "<<k<<endl;
+					
+      if(tri == 0){
+	v2 += nbv_h;
+	v3 --;
+	k ++;
+      }	
+      tri ++;
+    }  
+    v1 ++;
+    v2 = v1 + 1;
+    v3 += 2;
+
+    if(v1 % nbv_h == 0){
+      v1 ++;
+      v2 ++;
+      v3 ++;
+    }
+    k ++;
+                
+  }
+   			
+		
+  os.close();
+ 
+	
+	
+	
+}
+
+
+
+
+
+
+
+
+
+void Mesh::print_vertices() const {
+
+  cout<<"\ntabv"<<endl;
+  for(int i = 0; i < nbv; i++){
+    cout<<"("<<tabv[i].first.first<<","<<tabv[i].first.second<<") "<<tabv[i].second<<endl;
+  }
+
+}
+
+void Mesh::print_elements() const {
+
+  cout<<"\ntabt"<<endl;
+  for(int i = 0; i < nbt; i++){
+    cout<<"|"<<tabt[i][0]<<","<<tabt[i][1]<<","<<tabt[i][2]<<"| "<<tabt[i][3]<<endl;
+  }
+}
+
+
+void Mesh::print_edges() const {
+
+  cout<<"\ntabe"<<endl;
+  for(int i = 0; i < nbe; i++){
+    cout<<"|"<<tabe[i].first<<","<<tabe[i].second<<"|"<<endl;
+  }
+
+}
+
+void Mesh::print_vertices_boundary() const {
+
+  cout<<"\ntabvBound"<<endl;
+  for(int i = 0; i < nbvBound; i++){
+    cout<<"|"<<tabvBound[i]<<"|"<<endl;
+  }
+
+}
+
+
+
+void Mesh::export_mesh_data() const{
+
+  {
+    ofstream file(mesh_data);
+
+    for(int i = 0; i<nbt; i++){
+      for(int j = 0; j<3; j++){
+	file << tabv[tabt[i][j]].first.first << " " << tabv[tabt[i][j]].first.second << " 0"<<endl;
+      }
+      file << tabv[tabt[i][0]].first.first << " " << tabv[tabt[i][0]].first.second << " 0\n" <<endl;
+    }
+  
+    file.close();
+  }
+
+  {
+    ofstream file(mesh_gnu);
+
+    file<<"set title \"Mesh\""<<endl;
+    file<<"set key off"<<endl;
+    file<<"plot '"<<mesh_data<<"' with lines"<<endl;
+    file.close();
+  
+    file.close();
+  }
+
+}
+
+
+void Mesh::mesh_visu(bool mesh, bool solution) const{
+  string name;
+  if(mesh){
+    name = mesh_gnu;
+  }
+
+  if(solution){
+    name = solution_gnu;
+  }
+  
+  string s = "gnuplot  " + name + " -persist";
+  char * cstr = new char [s.length()+1];
+  strcpy (cstr, s.c_str());
+  system(cstr);
+ 
+}
+
+
+
+void Mesh::export_solution_data(Vecteur const& solution) const{
+
+  if(!resolved){
+    cout<<"PROBLEM NOT SOLVED YET"<<endl; exit(1);
+  }
+
+  {
+    ofstream file(solution_data);
+
+    for(int i = 0; i<nbt; i++){
+      for(int j = 0; j<3; j++){
+	file << tabv[tabt[i][j]].first.first << " " << tabv[tabt[i][j]].first.second << " "<<solution(tabt[i][j])<<endl;
+      }
+      file << tabv[tabt[i][0]].first.first << " " << tabv[tabt[i][0]].first.second << " "<<solution(tabt[i][0])<<endl;
+    }
+  
+    file.close();
+  }
+
+  {
+    ofstream file(solution_gnu);
+
+    file<<"set title \"Approximate solution\""<<endl;
+    file<<"set key off"<<endl;
+    file<<"splot '"<<solution_data<<"'using 1:2:3 with lines palette lw 2"<<endl;
+    file.close();
+  
+    file.close();
+  }
+
+}
+
+
+
+
+
+
+
+
+int Mesh:: get_nbv() const { return nbv;} 
+int Mesh::get_nbt() const { return nbt;} 
+int Mesh::get_nbe() const {return nbe;}
+int Mesh::get_nbvBound() const {return nbvBound;}
+
+
+double Mesh::get_x(int index) const {assert(index >=0 && index < nbv); return tabv[index].first.first;}
+double Mesh::get_y(int index) const {assert(index >=0 && index < nbv); return tabv[index].first.second;} 
+
+int Mesh::get_vertex(int index, int v) const {assert(index >=0 && index < nbt && v >= 0 && v < 3); return tabt[index][v]; }
+
+int Mesh::get_edge(int index, int v) const{
+  assert(index >=0 && index < nbe && v >= 0 && v < 2);
+  double res;
+  if(v == 0){
+    res = tabe[index].first;
+  }else{
+    res = tabe[index].second;
+  }
+  return res;
+}
+
+int Mesh::get_vertex_bound(int index) const {assert(index >=0 && index < nbv); return tabvBound[index]; }
+
+
+void Mesh::set_resolved(){ resolved = true; }
+void Mesh::unset_resolved(){ resolved = false; }

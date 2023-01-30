@@ -1,0 +1,397 @@
+#include<iostream>
+#include<fstream>
+#include<cmath>
+#include"Assembly.hpp"
+
+#define M_PI           3.14159265358979323846  /* pi */
+
+using namespace std;
+
+
+/**
+ *Fonction qui renvoie l aire du triangle forme par node1 node2 et node3
+ */
+double areaTri(double node1X,double node1Y,double node2X,double node2Y,double node3X,double node3Y){
+   
+  double a = (node2X-node3X)*(node3Y - node1Y);
+  double b = (node3X-node1X)*(node2Y - node3Y);
+    
+  return (0.5)*abs(a-b);
+	
+}
+	
+		
+	
+/**
+ *Fonction qui renvoie la matrice de masse elementaire pour le triangle forme de
+ *node1 node2 et node3
+ */
+DenseMatrix MassElem(double node1X,double node1Y,double node2X,double node2Y,double node3X,double node3Y){
+    
+  DenseMatrix M(3,3);
+  double T = areaTri(node1X,node1Y,node2X,node2Y,node3X,node3Y);
+    
+  for(int i = 0; i<3; i++){
+    for(int j = 0; j<3; j++){ 
+      if(i == j){
+	M(i,j) = T/6;
+      }else{
+	M(i,j) = T/12;
+      }
+    }
+  }
+
+  return M;
+	
+	
+}
+	
+
+	
+/**
+ *Fonction qui renvoie la matrice de rigidite elementaire pour le triangle forme de
+ *node1 node2 et node3
+ */
+DenseMatrix RigElem(double node1X,double node1Y,double node2X,double node2Y,double node3X,double node3Y){
+    
+  DenseMatrix K(3,3);
+  double T = areaTri(node1X,node1Y,node2X,node2Y,node3X,node3Y);
+    
+  double C = 1/(4*T);
+    
+    
+  K(0,0)= C*(pow(node2Y-node3Y,2)+pow(node2X-node3X,2));
+    
+  K(0,1) = C*((node2Y-node3Y)*(node3Y-node1Y)+(node2X-node3X)*(node3X-node1X));
+    
+  K(0,2) = C*((node2Y-node3Y)*(node1Y-node2Y)+(node2X-node3X)*(node1X-node2X));
+
+  K(1,0) = K(0,1);
+    
+  K(1,1) = C*(pow(node3Y-node1Y,2)+pow(node3X-node1X,2));
+    
+  K(1,2) = C*((node3Y-node1Y)*(node1Y-node2Y)+(node3X-node1X)*(node1X-node2X));
+
+  K(2,0) = K(0,2);
+    
+  K(2,1) = K(1,2);
+    
+  K(2,2) = C*(pow(node1Y-node2Y,2)+pow(node1X-node2X,2));
+
+  return K;
+	
+	
+}
+	
+	
+	
+	
+       
+
+
+
+
+/**
+*Fonction qui renvoie la matrice de rigidite du systeme
+*/
+MatCSR Stiffness_Mass_matrix(Mesh const& Th, bool stiff){
+   
+  double nbv = Th.get_nbv();
+  double nbt = Th.get_nbt();
+  double nbe = Th.get_nbe();
+
+  MatrixMap A;
+
+  cout<<nbv<<" "<<nbt<<" "<<nbe<<endl;
+  for(unsigned int i = 0; i<nbe;i++){
+    int il = Th.get_edge(i,0);
+    int jl = Th.get_edge(i,1);
+    pair<int,int> pos(il,jl), pos2(jl,il);
+    A[pos] = 0; A[pos2] = 0;
+  }
+  
+    
+
+  for(int i = 0; i<nbv; i++){
+    pair<int,int> pos(i,i);
+    A[pos] = 0;
+  }
+    
+  MatCSR K(nbv,nbv,A);
+  
+
+
+  for(int i = 0; i<nbt; i++){
+		
+    double v1X = Th.get_x(Th.get_vertex(i,0));
+    double v1Y = Th.get_y(Th.get_vertex(i,0));
+    double v2X = Th.get_x(Th.get_vertex(i,1));
+    double v2Y = Th.get_y(Th.get_vertex(i,1));
+    double v3X = Th.get_x(Th.get_vertex(i,2));
+    double v3Y = Th.get_y(Th.get_vertex(i,2));
+
+    DenseMatrix Kt(3,3);
+
+    if(stiff){
+      Kt = RigElem(v1X,v1Y,v2X,v2Y,v3X,v3Y);
+    }else{
+      Kt = MassElem(v1X,v1Y,v2X,v2Y,v3X,v3Y);
+    }
+		
+
+    for(int j = 0; j<3; j++){
+      for(int k = 0; k<3; k++){ 
+	K(Th.get_vertex(i,j),Th.get_vertex(i,k)) += Kt(j,k);
+      }
+    }
+
+  }
+	
+  return K;
+	
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/**
+ *Fonction qui renvoie le vecteur second membre du systeme
+ */
+Vecteur setSecondMember(DenseMatrix const& tabNodes){
+	
+  Vecteur f(tabNodes.getnbR());
+	
+  for(int i = 0; i<f.getTaille(); i++){
+    double x = tabNodes(i,0);
+    double y = tabNodes(i,1);
+    double u =  y*y*(3-2*y)*sin(2*3.14*x);
+    //f(i) = (1+4*3.14*3.14)*u-6*(1-2*y)*sin(2*3.14*x);
+    f(i) = 1000;
+  }
+	
+  return f;
+	
+	
+	
+}
+
+
+
+
+/**
+ *Fonction qui renvoie le vecteur F du systeme associea la forme lineaire
+ *dans le cas d une condition de Neumann homogene
+ */
+Vecteur AssemblyF(DenseMatrix const& M, Vecteur const& f){
+    
+  return M*f;
+}
+
+
+
+
+
+/**
+ *Fonction qui renvoie la valeur de l integrale de f*phi sur un triangle par une formule de
+ *quadrature d ordre 1 a 3 points
+ */
+double quadratureTri(int i,double node1X, double node1Y, double node2X, double node2Y, double node3X, double node3Y){
+    	
+			
+  double X1 = 0.5*(node1X + node2X);
+  double Y1 = 0.5*(node1Y + node2Y);
+
+  double X2 = 0.5*(node2X + node3X);
+  double Y2 = 0.5*(node2Y + node3Y);
+
+  double X3 = 0.5*(node1X + node3X);
+  double Y3 = 0.5*(node1Y + node3Y);
+
+  double F1 = X1*Y1;
+  double F2 = X2*Y2;
+  double F3 = X2*Y2;
+			
+  double T = areaTri(node1X,node1Y,node2X,node2Y,node3X,node3Y);
+
+  if(i == 1){
+    return (0.5*F1 + 0.5*F3)*(T/3);
+  }else{
+    if(i ==2){
+      return (0.5*F1 + 0.5*F2)*(T/3);
+    }else{
+      if(i == 3){
+	return (0.5*F2 + 0.5*F3)*(T/3);
+      }
+    }
+  }
+						
+			
+}
+
+
+
+
+			
+			
+			
+/**
+ *Fonction qui renvoie la valeur de l integrale de f*phi*phi sur un triangle par une formule de
+ *quadrature d ordre 1 a 3 points
+ */
+DenseMatrix quadratureTriG(double node1X, double node1Y, double node2X, double node2Y, double node3X, double node3Y){
+    	
+	
+  double X1 = 0.5*(node1X + node2X);
+  double Y1 = 0.5*(node1Y + node2Y);
+
+  double X2 = 0.5*(node2X + node3X);
+  double Y2 = 0.5*(node2Y + node3Y);
+
+  double X3 = 0.5*(node1X + node3X);
+  double Y3 = 0.5*(node1Y + node3Y);
+
+  double T = areaTri(node1X,node1Y,node2X,node2Y,node3X,node3Y);
+	
+  //Change function here
+  double F1 = 100000*sin(2*M_PI*X1)*sin(2*M_PI*X1);
+  double F2 = 100000*sin(2*M_PI*X2)*sin(2*M_PI*X2);
+  double F3 = 100000*sin(2*M_PI*X3)*sin(2*M_PI*X3);
+	
+  DenseMatrix M(3,3);
+    
+
+
+    
+  M(0,0) = (0.25*F1 + 0.25*F3)*(T/3);
+    
+  M(0,1) = 0.25*F1*(T/3);
+    
+  M(0,2) = 0.25*F3*(T/3);
+    
+  M(1,0) =  M(0,1);
+    
+  M(1,1) = (0.25*F1 + 0.25*F2)*(T/3);
+    
+  M(1,2) = 0.25*F2*(T/3);
+    
+  M(2,0) = M(0,2);
+    
+  M(2,1) = M(1,2);
+    
+  M(2,2) = (0.25*F2 + 0.25*F3)*(T/3);
+
+
+  return M;
+						
+			
+}			
+			
+			
+
+
+
+
+		
+
+
+
+
+
+
+/**
+ *Fonction qui renvoie la matrice de masse du systeme associe a une fonction g 
+ */
+DenseMatrix AssemblyMG(DenseMatrix const& tabNodes,DenseMatrix const& tabElts){
+   
+  int nbNodes = tabNodes.getnbR();
+  int nbElts = tabElts.getnbR();
+    
+  DenseMatrix M(nbNodes,nbNodes);
+
+
+  for(int i = 0; i<nbElts; i++){
+		
+    double node1X = tabNodes(tabElts(i,0),0);
+    double node1Y = tabNodes(tabElts(i,0),1);
+    double node2X = tabNodes(tabElts(i,1),0);
+    double node2Y = tabNodes(tabElts(i,1),1);
+    double node3X = tabNodes(tabElts(i,2),0);
+    double node3Y = tabNodes(tabElts(i,2),1);
+        
+    DenseMatrix Mt = quadratureTriG(node1X,node1Y,node2X,node2Y,node3X,node3Y);
+		
+		
+    for(int j = 0; j<3; j++){
+      for(int k = 0; k<3; k++){ 
+	M(tabElts(i,j),tabElts(i,k)) += Mt(j,k);
+      }
+    }
+  }
+  return M;
+	
+}
+
+
+		
+
+		
+
+/**
+ *Fonction qui renvoie le vecteur F du systeme associe a la forme lineaire
+ *avec une regle de quadrature
+ */		
+Vecteur assemblyFQuad(DenseMatrix tabNodes, DenseMatrix tabElts){
+    
+    
+  Vecteur F(tabNodes.getnbR());
+	
+  for(int  i = 0; i<tabElts.getnbR(); i++){
+        
+    double node1X = tabNodes(tabElts(i,0),0);
+    double node1Y = tabNodes(tabElts(i,0),1);
+    double node2X = tabNodes(tabElts(i,1),0);
+    double node2Y = tabNodes(tabElts(i,1),1);
+    double node3X = tabNodes(tabElts(i,2),0);
+    double node3Y = tabNodes(tabElts(i,2),1);
+        
+    for(int j = 0; j<3; j++){ 
+      F(tabElts(i,j)) += quadratureTri(j+1,node1X,node1Y,node2X,node2Y,node3X,node3Y);
+    }
+  }
+    
+  return F;
+
+}
+
+
+
+
